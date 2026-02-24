@@ -28,15 +28,19 @@
 - **어떻게 동작하는가?**
   - 
     ```
+    DDD에서는 도메인을 이해하는 것이 먼저다. DDD는 Domain 모델을 중심으로 동작한다.
+    요청이 들어오면 Application Layer가 트랜잭션을 시작하고
+    Domain에 속한 Entity 객체의 메서드를 호출하여 비즈니스 규칙을 실행한다.
+    Domain은 스스로 불변 조건을 보장하고, Infrastructure에서는 기술 구현 및 영속성을 담당한다.
     ```
 
 ---
 
 ### 3️⃣ 핵심 키워드
 
-- `키워드 1`
-- `키워드 2`
-- `키워드 3`
+- `DDD`
+- `Layered Architecture`
+- `Bounded Context`
 
 ---
 
