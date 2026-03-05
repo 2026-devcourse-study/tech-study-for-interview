@@ -33,39 +33,6 @@
     - 조직 ID를 매개로 받아서 Sender 객체 반환 (클라우드메시지인지, 센드톡인지)
   - 발송 후 MessageHistory 기록
 
-```java
-interface MessageSender {
-    void send(MessageRequest req);
-}
-
-class CloudMessageSender implements MessageSender { ... }
-
-class SendTalkSender implements MessageSender { ... }
-
-class MessageSenderFactory {
-    MessageSender getSender(Organization org) { ... }
-}
-
-
-@Service
-public class MessageService {
-
-    private final MessageSenderFactory senderFactory;
-
-    public MessageService(MessageSenderFactory senderFactory) {
-        this.senderFactory = senderFactory;
-    }
-
-    public void sendMessage(MessageRequest request) {
-        // CloudMessageSender, SendTalkSender 중 선택
-        MessageSender sender = senderFactory.getSender(request.getOrganizationId());
-        // MessageService는 구체 구현 몰라도 됨
-        sender.send(request);
-        // 전송 정보 기록
-        messageHistoryRepository.save(request);
-    }
-}
-```
 
 ### 단계 5: 예외 처리
 - 목표: 장애/설정 누락 대비
@@ -134,6 +101,44 @@ CloudMessageSender        SendtalkSender
 implements MessageSender  implements MessageSender
 ```
 
+
+```java
+interface MessageSender {
+    void send(MessageRequest req);
+}
+
+class CloudMessageSender implements MessageSender { ... }
+
+class SendTalkSender implements MessageSender { ... }
+
+class MessageSenderFactory {
+    MessageSender getSender(Organization org) { ... }
+}
+
+
+@Service
+public class MessageService {
+
+    private final MessageSenderFactory senderFactory;
+
+    public MessageService(MessageSenderFactory senderFactory) {
+        this.senderFactory = senderFactory;
+    }
+
+    public void sendMessage(MessageRequest request) {
+        // CloudMessageSender, SendTalkSender 중 선택
+        MessageSender sender = senderFactory.getSender(request.getOrganizationId());
+        // MessageService는 구체 구현 몰라도 됨
+        sender.send(request);
+        // 전송 정보 기록
+        messageHistoryRepository.save(request);
+    }
+}
+```
+<br></br>
+
+
+
 MessageService는 MessageSender 인터페이스만 알고 있음. </br>
 MessageService 내부에서 cloudMessageClient.send(...) 같은 직접 호출은 사라짐
 
@@ -144,6 +149,9 @@ MessageService
   - CloudMessageSender (구현체)
   - SendtalkSender (구현체)
 ```
+
+
+
 <br></br>
 ### 3. 업체별 메시지 전송 로직 호출 (대안 비교)
 - 1번 - MessageService에서 직접 호출
@@ -259,8 +267,39 @@ public class MessageService {
 - 새로운 업체가 계속 추가되어도 Factory나 MessageService 코드 수정 필요없이 MessageSender 구현체 추가만 하면 됨 -> OCP 준수
 
 
+<br></br>
+
 ## 3. 리스크 및 대응
 
+### 1. API 장애 (업체 서버 다운, 네트워크 문제)
+영향: 모든 조직/사용자에게 메시지 발송 실패
+대응 방안:
+  - 재시도 전략
+  - Circuit breaker 패턴 적용 (Fallback으로 우회하도록 처리)
+
+### 2. 응답 지연 / 타임아웃
+영향: 실시간 메시지 발송 지연
+- 타임아웃 설정
+- 비동기 큐로 발송 처리 (Kafka, RabbitMQ)
+- 타임아웃 시 재시도
+
+### 3. 메시지 업체 변경 직후 발송 중 메시지 누락
+영향: 변경 시점의 발송 메시지 일부 누락
+문제 상황 : 
+```
+관리자가 설정을 '업체 A'에서 '업체 B'로 바꾸는 0.1초 사이에 대량의 메시지 발송 요청이 들어온다면? 
+큐에 쌓인 메시지들이 처리될 때 DB를 다시 조회하면, 어떤 건 A로, 어떤 건 B로 발송되는 혼란이 생길 수 있음.
+```  
+- 발송 전 변경 금지/잠금
+- 변경 트랜잭션 적용
+- 메시지 발송을 비동기 큐(예: Kafka, RabbitMQ)로 처리
+
+**상세 해결 방안**: 비동기 메시지 큐를 사용한다고 가정(Kafka, RabbitMQ 등)
+1. 메시지 발행(Producer) 시점: DB에서 현재 조직의 OrgMessageConfig를 조회
+2. 페이로드(Payload) 구성: 메시지 본문뿐만 아니라, 사용할 Sender 이름과 API Key 등을 포함한 전송 객체 생성
+3. 큐 저장: 이 객체를 Kafka/RabbitMQ에 전달
+4. 컨슈머(Consumer) 실행: 큐에서 메시지를 꺼낸 워커는 다시 DB를 조회하지 않고, 메시지 객체 안에 들어있는 설정 정보를 그대로 사용하여 발송 API를 호출
+=> 설정이 변경되더라도 이미 큐에 들어간 작업들은 발행 당시의 유효한 설정으로 안전하게 끝까지 처리된다.
 
 
 # Part B. 화면 설계
