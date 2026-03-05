@@ -71,7 +71,12 @@ OrganizationSenderConfig (
   updated_at
 )
 ```
-> config 컬럼의 경우, 업체별로 필요한 설정 값이 다르기 때문에 스키마 변경 없이 확장할 수 있도록 JSON 컬럼을 사용
+### ❗중요: 클라우드메시지와 센드톡 API 문서의 차이 보완
+> config 컬럼의 경우, 업체별로 필요한 인증 정보 값과 개수가 다르기 때문에 고정 컬럼보다는 스키마 변경 없이 확장할 수 있도록 JSON 컬럼이 적합하다고 판단.<br>
+> CloudMessage용: {"api_key": "cloud_sk_..."}<br>
+> SendTalk용: {"api_token": "sendtalk_at_...", "secret_key": "..."}<br>
+> 클라우드메시지(Header 인증)와 센드톡(Body 인증)의 API 명세 차이가 있음. <br>
+
 <br></br>
 **MessageHistory 이력 저장용 테이블에도 provider_type 컬럼 추가**
 ```sql
