@@ -5,6 +5,7 @@
 **기존**: 모든 조직이 같은 메시지 업체 이용 </br>
 **변경**: 조직별로 메시지 업체 선택해서 발송하게 하자
 <br></br>
+
 ## 1. 작업 단계
 
 ### 단계 1: 요구사항 분석
@@ -405,6 +406,10 @@ public class CloudMessageSender implements MessageSender {
 외부 메시지 업체는 인증 방식(Header, Body)과 요청 스펙이 서로 다르므로,
 내부 공통 DTO(MessageRequest)와 인터페이스(MessageSender)를 정의하고 업체별 Sender 구현체에서 API 요청 변환 및 인증 처리를 담당하도록 설계
 ```
+
+## ERD 정리
+![JPEG 이미지-45A6-85F7-DE-0](https://github.com/user-attachments/assets/94d9b116-29e4-433c-bd46-db12240d86bd)
+
 
 
 # Part B. 화면 설계
