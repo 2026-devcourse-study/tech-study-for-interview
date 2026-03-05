@@ -70,7 +70,21 @@ OrganizationSenderConfig (
   updated_at
 )
 ```
+
+**MessageHistory 이력 저장용 테이블에도 provider_type 컬럼 추가**
+```sql
+MessageHistory(
+  id,
+  organization_id (FK) -> Organization,
+  message_type  ENUM(SMS, MMS, KAKAO),
+  provider_type ENUM(CLOUD_MESSAGE, SENDTALK),
+  message_content,
+  status,
+  created_at
+)
+```
 <br></br>
+
 
 ### 2. 전송 구조 결정 사항
 
@@ -149,6 +163,10 @@ MessageService
   - CloudMessageSender (구현체)
   - SendtalkSender (구현체)
 ```
+
+
+<img width="355" height="440" alt="스크린샷 2026-03-05 오후 6 46 06" src="https://github.com/user-attachments/assets/f14ffab2-194e-4b68-a56d-2f9746e772d5" />
+
 
 
 
@@ -275,13 +293,15 @@ public class MessageService {
 영향: 모든 조직/사용자에게 메시지 발송 실패
 대응 방안:
   - 재시도 전략
-  - Circuit breaker 패턴 적용 (Fallback으로 우회하도록 처리)
+  - Circuit breaker 패턴 적용 :
+    - 특정 업체의 에러율이 임계치를 넘으면 'Open' 상태가 되어 해당 업체로의 요청을 즉시 차단하고 에러를 반환하거나(사용자 경험 위해 '서비스 점검 중' 문구 표시),Fallback으로 전환하여 예외 처리하도록 설계
 
 ### 2. 응답 지연 / 타임아웃
 영향: 실시간 메시지 발송 지연
 - 타임아웃 설정
 - 비동기 큐로 발송 처리 (Kafka, RabbitMQ)
-- 타임아웃 시 재시도
+- 타임아웃 시 재시도 (비동기 처리와 DLQ)
+  - DLQ의 역할: 재시도 횟수를 초과한 메시지는 버리지 않고 'DLQ'라는 별도의 저장소로 보내어 수동으로 다시 처리하거나 고객에게 실패 알림 표시
 
 ### 3. 메시지 업체 변경 직후 발송 중 메시지 누락
 영향: 변경 시점의 발송 메시지 일부 누락
@@ -289,8 +309,7 @@ public class MessageService {
 ```
 관리자가 설정을 '업체 A'에서 '업체 B'로 바꾸는 0.1초 사이에 대량의 메시지 발송 요청이 들어온다면? 
 큐에 쌓인 메시지들이 처리될 때 DB를 다시 조회하면, 어떤 건 A로, 어떤 건 B로 발송되는 혼란이 생길 수 있음.
-```  
-- 발송 전 변경 금지/잠금
+```
 - 변경 트랜잭션 적용
 - 메시지 발송을 비동기 큐(예: Kafka, RabbitMQ)로 처리
 
@@ -301,7 +320,7 @@ public class MessageService {
 4. 컨슈머(Consumer) 실행: 큐에서 메시지를 꺼낸 워커는 다시 DB를 조회하지 않고, 메시지 객체 안에 들어있는 설정 정보를 그대로 사용하여 발송 API를 호출
 => 설정이 변경되더라도 이미 큐에 들어간 작업들은 발행 당시의 유효한 설정으로 안전하게 끝까지 처리된다.
 
-
+<br></br>
 # Part B. 화면 설계
 
 
