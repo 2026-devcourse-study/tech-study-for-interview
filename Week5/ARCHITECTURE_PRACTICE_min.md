@@ -90,8 +90,8 @@ MessageHistory(
   created_at
 )
 ```
-<br></br>
 
+<br></br>
 
 ### 2. 전송 구조 결정 사항
 
@@ -296,6 +296,70 @@ public class MessageService {
 
 <br></br>
 
+
+
+### 5. 메시지 업체 API의 인증 방식과 API 요청 스펙이 다를 경우
+> 외부 메시지 업체 API의 요청 스펙이 서로 다르므로<br>
+> 내부 공통 DTO(MessageRequest)를 정의하고,<br>
+> 각 Sender 구현체에서 업체별 API 요청 DTO로 변환하도록 설계<br>
+
+### 내부 공통 DTO
+```java
+class MessageRequest {
+    String phoneNumber;
+    String message;
+}
+```
+### 업체별 요청 DTO
+```java
+class CloudMessageRequest {
+    String phone;
+    String message;
+    String apiKey;
+}
+```
+```java
+class SendTalkRequest {
+    String receiver;
+    String text;
+    String accessToken;
+}
+```
+
+따라서 업체별 MessageSender 구현체에서는 아래와 같이 구현된다.
+#### CloudMessageSender (Header 인증)
+#### SendTalkSender (Body 인증)
+```java
+@Component
+public class CloudMessageSender implements MessageSender {
+
+    private final CloudMessageClient client;
+
+    public CloudMessageSender(CloudMessageClient client) {
+        this.client = client;
+    }
+
+    @Override
+    public MessageResponse send(MessageRequest request,
+                                ProviderConfig config) {
+
+        CloudMessageApiRequest apiRequest =
+                new CloudMessageApiRequest(
+                        request.getPhoneNumber(),
+                        request.getMessage()
+                );
+
+        return client.send(
+                apiRequest,
+                config.getApiKey(),
+                config.getSecretKey()
+        );
+    }
+}
+```
+
+<br></br>
+
 ## 3. 리스크 및 대응
 
 ### 1. API 장애 (업체 서버 다운, 네트워크 문제)
@@ -333,6 +397,15 @@ public class MessageService {
 => 설정이 변경되더라도 이미 큐에 들어간 작업들은 발행 당시의 유효한 설정으로 안전하게 끝까지 처리된다.
 
 <br></br>
+
+
+
+## 결론
+```
+외부 메시지 업체는 인증 방식(Header, Body)과 요청 스펙이 서로 다르므로,
+내부 공통 DTO(MessageRequest)와 인터페이스(MessageSender)를 정의하고 업체별 Sender 구현체에서 API 요청 변환 및 인증 처리를 담당하도록 설계
+```
+
 
 # Part B. 화면 설계
 
